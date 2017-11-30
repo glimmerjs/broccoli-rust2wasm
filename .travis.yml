@@ -1,10 +1,12 @@
+sudo: required
+dist: trusty
 language: node_js
 node_js:
   - "8"
 
 before_install:
   - curl -f -L https://static.rust-lang.org/rustup.sh -O
-  - sh rustup.sh --channel=nightly --with-target=wasm32-unknown-unknown --disable-sudo
+  - sh rustup.sh --channel=nightly --with-target=wasm32-unknown-unknown
   - rustc -V
 
 script:
