@@ -24,7 +24,6 @@ export default class RustPlugin extends Plugin {
       this.entry.replace(".rs", ".wasm"));
 
     execFileSync(`rustc`, [
-      "+nightly",
       "--target", "wasm32-unknown-unknown",
       "-O",
       "--crate-type", "cdylib",
