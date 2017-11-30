@@ -6,10 +6,7 @@ QUnit.module("Rust", () => {
   QUnit.test("works with a entry file", async (assert) => {
     const input = await createTempDir();
     input.write({
-"mylib.rs": `
-#![feature(lang_items)]
-#![no_std]
-
+      "a.rs": `
 #[no_mangle]
 pub fn fibonacci(x: f64) -> f64 {
   if x <= 2.0 {
@@ -17,25 +14,29 @@ pub fn fibonacci(x: f64) -> f64 {
   } else {
     return fibonacci(x - 1.0) + fibonacci(x - 2.0);
   }
-}
+}`,
+      "lib.rs": `
+#![feature(lang_items)]
+#![no_std]
 
 #[lang = "panic_fmt"]
 #[no_mangle]
 pub extern fn panic_fmt() -> ! { loop {} }
-      `,
+
+pub mod a;`,
     });
     try {
       const plugin = new Rust(input.path(), {
-        entry: "mylib.rs",
+        entry: "lib.rs",
       });
       const output = createBuilder(plugin);
       try {
         await output.build();
 
         assert.deepEqual(output.changes(), {
-          "mylib.wasm": "create",
+          "lib.wasm": "create",
         });
-        const buffer = fs.readFileSync(output.path("mylib.wasm"));
+        const buffer = fs.readFileSync(output.path("lib.wasm"));
         const mod = new WebAssembly.Module(buffer);
         const instance = new WebAssembly.Instance(mod, {});
         assert.strictEqual(instance.exports.fibonacci(20), 6765);
