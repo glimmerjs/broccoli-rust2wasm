@@ -1,6 +1,6 @@
 {
   "name": "broccoli-rust2wasm",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "broccoli plugin to build rust to wasm",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,6 +10,10 @@
     "prepare": "tsc",
     "lint": "tslint -p tsconfig.json",
     "test": "tsc && qunit dist/test/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/glimmerjs/broccoli-rust2wasm.git"
   },
   "files": [
     "dist",
