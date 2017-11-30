@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import * as path from "path";
 
 export const Plugin: PluginStatic = require("broccoli-plugin");
@@ -23,8 +23,13 @@ export default class RustPlugin extends Plugin {
       this.outputPath,
       this.entry.replace(".rs", ".wasm"));
 
-    execSync(
-      `rustc +nightly --target wasm32-unknown-unknown -O --crate-type=cdylib -o ${outputFile} ${inputFile}`);
+    execFileSync(`rustc`, [
+      "+nightly",
+      "--target", "wasm32-unknown-unknown",
+      "-O",
+      "--crate-type", "cdylib",
+      "-o", outputFile,
+      inputFile]);
   }
 }
 
