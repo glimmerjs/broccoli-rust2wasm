@@ -46,8 +46,8 @@ pub mod a;`,
           "hello_lib.wasm": "create",
         });
         const buffer = fs.readFileSync(output.path("hello_lib.wasm"));
-        const mod = new WebAssembly.Module(buffer);
-        const instance = new WebAssembly.Instance(mod, {});
+        const mod = await WebAssembly.compile(buffer);
+        const instance = await WebAssembly.instantiate(mod, {});
         assert.strictEqual(instance.exports.fibonacci(20), 6765);
       } finally {
         output.dispose();
@@ -143,8 +143,8 @@ pub mod a;`,
           "lib.wasm": "create",
         });
         const buffer = fs.readFileSync(output.path("lib.wasm"));
-        const mod = new WebAssembly.Module(buffer);
-        const instance = new WebAssembly.Instance(mod, {});
+        const mod = await WebAssembly.compile(buffer);
+        const instance = await WebAssembly.instantiate(mod, {});
         assert.strictEqual(instance.exports.fibonacci(20), 6765);
       } finally {
         output.dispose();
