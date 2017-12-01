@@ -25,13 +25,14 @@ export default class RustPlugin extends Plugin {
 
   public build() {
     const { name, wasm } = this.compile();
-    let wasm_gc = this.gc(wasm);
+    let wasm_gc = this.wasm_gc(wasm);
+    let wasm_gc_opt = this.debug ? wasm_gc : this.wasm_opt(wasm_gc);
     if (this.generateWrapper) {
       const outputFile = path.join(this.outputPath, `${name}.js`);
-      fs.writeFileSync(outputFile, this.wrapper(wasm_gc));
+      fs.writeFileSync(outputFile, this.wrapper(wasm_gc_opt));
     } else {
       const outputFile = path.join(this.outputPath, `${name}.wasm`);
-      fs.writeFileSync(outputFile, wasm_gc);
+      fs.writeFileSync(outputFile, wasm_gc_opt);
     }
   }
 
@@ -114,11 +115,29 @@ export default (imports) => new WebAssembly.Instance(mod, imports).exports;
 `;
   }
 
-  protected gc(wasm: Buffer): Buffer {
-    const temp1 = path.join(this.cachePath, `input.wasm`);
-    const temp2 = path.join(this.cachePath, `input.gc.wasm`);
+  protected wasm_gc(wasm: Buffer): Buffer {
+    const temp1 = path.join(this.cachePath, `gc-input.wasm`);
+    const temp2 = path.join(this.cachePath, `gc-output.wasm`);
     fs.writeFileSync(temp1, wasm);
     execFileSync(`wasm-gc`, [temp1, temp2]);
+    return fs.readFileSync(temp2);
+  }
+
+  // Optionally run the `wasm-opt` binary from
+  // https://github.com/WebAssembly/binaryen but it's not always installed
+  // everywhere or easy to install so try to gracfully handle the case where it
+  // can't be found and instead just skip this step.
+  protected wasm_opt(wasm: Buffer): Buffer {
+    const temp1 = path.join(this.cachePath, `opt-input.wasm`);
+    const temp2 = path.join(this.cachePath, `opt-output.wasm`);
+    fs.writeFileSync(temp1, wasm);
+    try {
+      execFileSync(`wasm-opt`, [`-Os`, temp1, `-o`, temp2]);
+    } catch (err) {
+      if (err.code == 'ENOENT')
+        return wasm;
+      throw err;
+    }
     return fs.readFileSync(temp2);
   }
 }
