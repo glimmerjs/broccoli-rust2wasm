@@ -5,8 +5,9 @@ node_js:
   - "8"
 
 before_install:
-  - curl -f -L https://static.rust-lang.org/rustup.sh -O
-  - sh rustup.sh --channel=nightly --with-target=wasm32-unknown-unknown
+  - curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly -y
+  - export PATH=$PATH:$HOME/.cargo/bin
+  - rustup target add wasm32-unknown-unknown
   - rustc -V
 
 script:
