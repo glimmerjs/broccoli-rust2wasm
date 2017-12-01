@@ -33,13 +33,6 @@ pub fn fibonacci(x: f64) -> f64 {
   }
 }`,
       "lib.rs": `
-#![feature(lang_items)]
-#![no_std]
-
-#[lang = "panic_fmt"]
-#[no_mangle]
-pub extern fn panic_fmt() -> ! { loop {} }
-
 pub mod a;`,
       },
     });
@@ -92,13 +85,6 @@ pub fn fibonacci(x: f64) -> f64 {
   }
 }`,
       "lib.rs": `
-#![feature(lang_items)]
-#![no_std]
-
-#[lang = "panic_fmt"]
-#[no_mangle]
-pub extern fn panic_fmt() -> ! { loop {} }
-
 pub mod a;`,
       },
     });
@@ -143,13 +129,6 @@ pub fn fibonacci(x: f64) -> f64 {
   }
 }`,
       "lib.rs": `
-#![feature(lang_items)]
-#![no_std]
-
-#[lang = "panic_fmt"]
-#[no_mangle]
-pub extern fn panic_fmt() -> ! { loop {} }
-
 pub mod a;`,
     });
     try {
