@@ -153,6 +153,53 @@ pub mod a;`,
       input.dispose();
     }
   });
+
+  QUnit.test("wasm is gc'd", async (assert) => {
+    const input = await createTempDir();
+    input.write({
+      "Cargo.toml": `
+[package]
+name = "hello_lib"
+version = "0.1.0"
+authors = ["Kris Selden <kris.selden@gmail.com>"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.dev]
+opt-level = 1
+
+[dependencies]
+`,
+      "src": {
+        "lib.rs": `
+            #[no_mangle]
+            pub extern fn foo() {}
+        `,
+      },
+    });
+    try {
+      const plugin = new Rust(input.path());
+      const output = createBuilder(plugin);
+      try {
+        await output.build();
+
+        assert.deepEqual(output.changes(), {
+          "hello_lib.wasm": "create",
+        });
+        const buffer = fs.readFileSync(output.path("hello_lib.wasm"));
+        const mod = await WebAssembly.compile(buffer);
+        const instance = await WebAssembly.instantiate(mod, {});
+        assert.notStrictEqual(instance.exports.foo, undefined, "gc'd too much");
+        assert.strictEqual(instance.exports.__mulodi4, undefined, "not gc'd");
+      } finally {
+        output.dispose();
+      }
+    } finally {
+      input.dispose();
+    }
+  });
+
 });
 
 declare const WebAssembly: any;

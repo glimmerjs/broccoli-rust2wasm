@@ -8,6 +8,7 @@ before_install:
   - curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly -y
   - export PATH=$PATH:$HOME/.cargo/bin
   - rustup target add wasm32-unknown-unknown
+  - cargo install --git https://github.com/alexcrichton/wasm-gc --debug
   - rustc -V
 
 script:

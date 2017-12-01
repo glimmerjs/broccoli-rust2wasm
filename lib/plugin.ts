@@ -24,13 +24,14 @@ export default class RustPlugin extends Plugin {
   }
 
   public build() {
-    const { name, wasm} = this.compile();
+    const { name, wasm } = this.compile();
+    let wasm_gc = this.gc(wasm);
     if (this.generateWrapper) {
       const outputFile = path.join(this.outputPath, `${name}.js`);
-      fs.writeFileSync(outputFile, this.wrapper(wasm));
+      fs.writeFileSync(outputFile, this.wrapper(wasm_gc));
     } else {
       const outputFile = path.join(this.outputPath, `${name}.wasm`);
-      fs.writeFileSync(outputFile, wasm);
+      fs.writeFileSync(outputFile, wasm_gc);
     }
   }
 
@@ -111,6 +112,14 @@ export default class RustPlugin extends Plugin {
 const mod = new WebAssembly.Module(toBuffer("${buffer.toString("base64")}"));
 export default (imports) => new WebAssembly.Instance(mod, imports).exports;
 `;
+  }
+
+  protected gc(wasm: Buffer): Buffer {
+    const temp1 = path.join(this.cachePath, `input.wasm`);
+    const temp2 = path.join(this.cachePath, `input.gc.wasm`);
+    fs.writeFileSync(temp1, wasm);
+    execFileSync(`wasm-gc`, [temp1, temp2]);
+    return fs.readFileSync(temp2);
   }
 }
 
