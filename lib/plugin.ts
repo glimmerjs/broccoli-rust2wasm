@@ -9,25 +9,28 @@ export const Plugin: PluginStatic = require("broccoli-plugin");
 export interface RustPluginOptions {
   entry?: string;
   generateWrapper?: boolean;
+  generateAsyncWrapper?: boolean;
 }
 
 export default class RustPlugin extends Plugin {
   private entry: string | undefined;
   private debug: boolean;
   private generateWrapper: boolean;
+  private generateAsyncWrapper: boolean;
 
   constructor(input: any, options?: RustPluginOptions) {
     super([input]);
     this.debug = process.env.NODE_ENV !== "production";
     this.entry = options && options.entry;
     this.generateWrapper = options !== undefined && options.generateWrapper === true;
+    this.generateAsyncWrapper = options !== undefined && options.generateAsyncWrapper === true;
   }
 
   public build() {
     const { name, wasm } = this.compile();
     let wasm_gc = this.wasm_gc(wasm);
     let wasm_gc_opt = this.debug ? wasm_gc : this.wasm_opt(wasm_gc);
-    if (this.generateWrapper) {
+    if (this.generateWrapper || this.generateAsyncWrapper) {
       const outputFile = path.join(this.outputPath, `${name}.js`);
       fs.writeFileSync(outputFile, this.wrapper(wasm_gc_opt));
     } else {
@@ -109,10 +112,18 @@ export default class RustPlugin extends Plugin {
 
   protected wrapper(buffer: Buffer) {
     // tslint:disable-next-line:max-line-length
-    return `const toBuffer = typeof Buffer === 'undefined' ? (str) => Uint8Array.from(atob(str), c => c.charCodeAt(0)) : (str) => Buffer.from(str, 'base64');
-const mod = new WebAssembly.Module(toBuffer("${buffer.toString("base64")}"));
-export default (imports) => new WebAssembly.Instance(mod, imports).exports;
-`;
+    let toBuffer = `const toBuffer = typeof Buffer === 'undefined' ? (str) => Uint8Array.from(atob(str), c => c.charCodeAt(0)) : (str) => Buffer.from(str, 'base64');`;
+    let deserialized = `toBuffer("${buffer.toString("base64")}")`;
+    if (this.generateAsyncWrapper) {
+      return `${toBuffer}
+export default async (imports) =>
+  const mod = await WebAssembly.compile(${deserialized});
+  return (await WebAssembly.instantiate(mod, imports)).exports;`;
+    } else {
+      return `${toBuffer}
+const mod = new WebAssembly.Module(${deserialized});
+export default (imports) => new WebAssembly.Instance(mod, imports).exports;`;
+    }
   }
 
   protected wasm_gc(wasm: Buffer): Buffer {
