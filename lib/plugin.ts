@@ -1,4 +1,5 @@
 import { execFileSync } from "child_process";
+import describeWasm from "describe-wasm";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -10,6 +11,7 @@ export interface RustPluginOptions {
   entry?: string;
   generateWrapper?: boolean;
   generateAsyncWrapper?: boolean;
+  generateTypescript?: boolean;
 }
 
 export default class RustPlugin extends Plugin {
@@ -17,6 +19,7 @@ export default class RustPlugin extends Plugin {
   private debug: boolean;
   private generateWrapper: boolean;
   private generateAsyncWrapper: boolean;
+  private generateTypescript: boolean;
 
   constructor(input: any, options?: RustPluginOptions) {
     super([input]);
@@ -24,6 +27,7 @@ export default class RustPlugin extends Plugin {
     this.entry = options && options.entry;
     this.generateWrapper = options !== undefined && options.generateWrapper === true;
     this.generateAsyncWrapper = options !== undefined && options.generateAsyncWrapper === true;
+    this.generateTypescript = options !== undefined && options.generateTypescript === true;
   }
 
   public build() {
@@ -33,6 +37,11 @@ export default class RustPlugin extends Plugin {
     if (this.generateWrapper || this.generateAsyncWrapper) {
       const outputFile = path.join(this.outputPath, `${name}.js`);
       fs.writeFileSync(outputFile, this.wrapper(wasmGcOpt));
+
+      if (this.generateTypescript) {
+        const typescriptFile = path.join(this.outputPath, `${name}.d.ts`);
+        fs.writeFileSync(typescriptFile, this.typescript(wasmGcOpt));
+      }
     } else {
       const outputFile = path.join(this.outputPath, `${name}.wasm`);
       fs.writeFileSync(outputFile, wasmGcOpt);
@@ -151,6 +160,81 @@ export default (imports) => new WebAssembly.Instance(mod, imports).exports;`;
       throw err;
     }
     return fs.readFileSync(temp2);
+  }
+
+  protected typescript(wasm: Buffer): string {
+    const parsed = describeWasm(wasm);
+
+    let imports = `export interface FunctionImports {\n`;
+    let importedFunctions = 0;
+    for (const imp of parsed.imports) {
+      if (imp.kind !== "Function") {
+        continue;
+      }
+      importedFunctions += 1;
+      if (imp.module !== "env") {
+        continue;
+      }
+      const signature = parsed.signatures[imp.signature];
+      imports += `  ${imp.name}(`;
+      for (let j = 0; j < signature.params.length; j++) {
+        if (j > 0) {
+          imports += `, `;
+        }
+        imports += `arg${j}: ${this.wasmTypeToTypescript(signature.params[j])}`;
+      }
+      imports += `): ${this.wasmTypeToTypescript(signature.return)};\n`;
+    }
+    imports += `}\n`;
+
+    imports += `
+export interface Imports {
+  env: FunctionImports;
+}`;
+
+    let exports = `export interface Exports {\n`;
+    for (const exp of parsed.exports) {
+      if (exp.kind === "Memory") {
+        exports += `  ${exp.name}: WebAssembly.Memory;\n`;
+        continue;
+      }
+      if (exp.kind !== "Function") {
+        continue;
+      }
+      const func = parsed.functions[exp.index - importedFunctions];
+      const signature = parsed.signatures[func];
+      exports += `  ${exp.name}(`;
+      for (let j = 0; j < signature.params.length; j++) {
+        if (j > 0) {
+          exports += `, `;
+        }
+        exports += `arg${j}: ${this.wasmTypeToTypescript(signature.params[j])}`;
+      }
+      exports += `): ${this.wasmTypeToTypescript(signature.return)};\n`;
+    }
+    exports += `}`;
+
+    const ret = this.generateAsyncWrapper ? `Promise<Exports>` : `Exports`;
+
+    return `
+${imports}
+
+${exports}
+
+declare const Mod: (imports: Imports) => ${ret};
+
+export default Mod;
+`;
+  }
+
+  protected wasmTypeToTypescript(ty: string): string {
+    if (ty === "i32" || ty === "i64" || ty === "f32" || ty === "f64") {
+      return "number";
+    }
+    if (ty === "void") {
+      return "void";
+    }
+    throw new Error(`unknown wasm type: ${ty}`);
   }
 }
 

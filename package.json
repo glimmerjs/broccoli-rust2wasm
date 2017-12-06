@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "broccoli-plugin": "^1.3.0",
-    "toml": "^2.3.3"
+    "toml": "^2.3.3",
+    "describe-wasm": "^0.1.1"
   }
 }
