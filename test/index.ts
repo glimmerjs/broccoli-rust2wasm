@@ -250,7 +250,7 @@ pub mod a;`,
           exports: {},
         });
         vm.runInContext(cjs.outputText, ctx);
-        let mod = await ctx.exports.default({});
+        const mod = await ctx.exports.default({});
         assert.strictEqual(mod.fibonacci(20), 6765);
       } finally {
         output.dispose();

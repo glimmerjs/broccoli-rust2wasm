@@ -28,14 +28,14 @@ export default class RustPlugin extends Plugin {
 
   public build() {
     const { name, wasm } = this.compile();
-    let wasm_gc = this.wasm_gc(wasm);
-    let wasm_gc_opt = this.debug ? wasm_gc : this.wasm_opt(wasm_gc);
+    const wasmGc = this.wasmGc(wasm);
+    const wasmGcOpt = this.debug ? wasmGc : this.wasmOpt(wasmGc);
     if (this.generateWrapper || this.generateAsyncWrapper) {
       const outputFile = path.join(this.outputPath, `${name}.js`);
-      fs.writeFileSync(outputFile, this.wrapper(wasm_gc_opt));
+      fs.writeFileSync(outputFile, this.wrapper(wasmGcOpt));
     } else {
       const outputFile = path.join(this.outputPath, `${name}.wasm`);
-      fs.writeFileSync(outputFile, wasm_gc_opt);
+      fs.writeFileSync(outputFile, wasmGcOpt);
     }
   }
 
@@ -112,8 +112,8 @@ export default class RustPlugin extends Plugin {
 
   protected wrapper(buffer: Buffer) {
     // tslint:disable-next-line:max-line-length
-    let toBuffer = `const toBuffer = typeof Buffer === 'undefined' ? (str) => Uint8Array.from(atob(str), c => c.charCodeAt(0)) : (str) => Buffer.from(str, 'base64');`;
-    let deserialized = `toBuffer("${buffer.toString("base64")}")`;
+    const toBuffer = `const toBuffer = typeof Buffer === 'undefined' ? (str) => Uint8Array.from(atob(str), c => c.charCodeAt(0)) : (str) => Buffer.from(str, 'base64');`;
+    const deserialized = `toBuffer("${buffer.toString("base64")}")`;
     if (this.generateAsyncWrapper) {
       return `${toBuffer}
 export default async (imports) =>
@@ -126,7 +126,7 @@ export default (imports) => new WebAssembly.Instance(mod, imports).exports;`;
     }
   }
 
-  protected wasm_gc(wasm: Buffer): Buffer {
+  protected wasmGc(wasm: Buffer): Buffer {
     const temp1 = path.join(this.cachePath, `gc-input.wasm`);
     const temp2 = path.join(this.cachePath, `gc-output.wasm`);
     fs.writeFileSync(temp1, wasm);
@@ -138,15 +138,16 @@ export default (imports) => new WebAssembly.Instance(mod, imports).exports;`;
   // https://github.com/WebAssembly/binaryen but it's not always installed
   // everywhere or easy to install so try to gracfully handle the case where it
   // can't be found and instead just skip this step.
-  protected wasm_opt(wasm: Buffer): Buffer {
+  protected wasmOpt(wasm: Buffer): Buffer {
     const temp1 = path.join(this.cachePath, `opt-input.wasm`);
     const temp2 = path.join(this.cachePath, `opt-output.wasm`);
     fs.writeFileSync(temp1, wasm);
     try {
       execFileSync(`wasm-opt`, [`-Os`, temp1, `-o`, temp2]);
     } catch (err) {
-      if (err.code == 'ENOENT')
+      if (err.code === "ENOENT") {
         return wasm;
+      }
       throw err;
     }
     return fs.readFileSync(temp2);
