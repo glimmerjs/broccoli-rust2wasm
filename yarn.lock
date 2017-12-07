@@ -371,6 +371,10 @@ delegates@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/delegates/-/delegates-1.0.0.tgz#84c6e159b81904fdca59a0ef44cd870d31250f9a"
 
+describe-wasm@^0.1.1:
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/describe-wasm/-/describe-wasm-0.1.1.tgz#155696dd49af699ea871a7db1c4d17d2ef32551b"
+
 detect-file@^0.1.0:
   version "0.1.0"
   resolved "https://registry.yarnpkg.com/detect-file/-/detect-file-0.1.0.tgz#4935dedfd9488648e006b0129566e9386711ea63"

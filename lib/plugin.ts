@@ -1,4 +1,5 @@
 import { execFileSync } from "child_process";
+import describeWasm from "describe-wasm";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -10,6 +11,7 @@ export interface RustPluginOptions {
   entry?: string;
   generateWrapper?: boolean;
   generateAsyncWrapper?: boolean;
+  generateTypescript?: boolean;
 }
 
 export default class RustPlugin extends Plugin {
@@ -17,6 +19,7 @@ export default class RustPlugin extends Plugin {
   private debug: boolean;
   private generateWrapper: boolean;
   private generateAsyncWrapper: boolean;
+  private generateTypescript: boolean;
 
   constructor(input: any, options?: RustPluginOptions) {
     super([input]);
@@ -24,18 +27,24 @@ export default class RustPlugin extends Plugin {
     this.entry = options && options.entry;
     this.generateWrapper = options !== undefined && options.generateWrapper === true;
     this.generateAsyncWrapper = options !== undefined && options.generateAsyncWrapper === true;
+    this.generateTypescript = options !== undefined && options.generateTypescript === true;
   }
 
   public build() {
     const { name, wasm } = this.compile();
-    let wasm_gc = this.wasm_gc(wasm);
-    let wasm_gc_opt = this.debug ? wasm_gc : this.wasm_opt(wasm_gc);
+    const wasmGc = this.wasmGc(wasm);
+    const wasmGcOpt = this.debug ? wasmGc : this.wasmOpt(wasmGc);
     if (this.generateWrapper || this.generateAsyncWrapper) {
       const outputFile = path.join(this.outputPath, `${name}.js`);
-      fs.writeFileSync(outputFile, this.wrapper(wasm_gc_opt));
+      fs.writeFileSync(outputFile, this.wrapper(wasmGcOpt));
+
+      if (this.generateTypescript) {
+        const typescriptFile = path.join(this.outputPath, `${name}.d.ts`);
+        fs.writeFileSync(typescriptFile, this.typescript(wasmGcOpt));
+      }
     } else {
       const outputFile = path.join(this.outputPath, `${name}.wasm`);
-      fs.writeFileSync(outputFile, wasm_gc_opt);
+      fs.writeFileSync(outputFile, wasmGcOpt);
     }
   }
 
@@ -112,8 +121,8 @@ export default class RustPlugin extends Plugin {
 
   protected wrapper(buffer: Buffer) {
     // tslint:disable-next-line:max-line-length
-    let toBuffer = `const toBuffer = typeof Buffer === 'undefined' ? (str) => Uint8Array.from(atob(str), c => c.charCodeAt(0)) : (str) => Buffer.from(str, 'base64');`;
-    let deserialized = `toBuffer("${buffer.toString("base64")}")`;
+    const toBuffer = `const toBuffer = typeof Buffer === 'undefined' ? (str) => Uint8Array.from(atob(str), c => c.charCodeAt(0)) : (str) => Buffer.from(str, 'base64');`;
+    const deserialized = `toBuffer("${buffer.toString("base64")}")`;
     if (this.generateAsyncWrapper) {
       return `${toBuffer}
 export default async (imports) =>
@@ -126,7 +135,7 @@ export default (imports) => new WebAssembly.Instance(mod, imports).exports;`;
     }
   }
 
-  protected wasm_gc(wasm: Buffer): Buffer {
+  protected wasmGc(wasm: Buffer): Buffer {
     const temp1 = path.join(this.cachePath, `gc-input.wasm`);
     const temp2 = path.join(this.cachePath, `gc-output.wasm`);
     fs.writeFileSync(temp1, wasm);
@@ -138,18 +147,94 @@ export default (imports) => new WebAssembly.Instance(mod, imports).exports;`;
   // https://github.com/WebAssembly/binaryen but it's not always installed
   // everywhere or easy to install so try to gracfully handle the case where it
   // can't be found and instead just skip this step.
-  protected wasm_opt(wasm: Buffer): Buffer {
+  protected wasmOpt(wasm: Buffer): Buffer {
     const temp1 = path.join(this.cachePath, `opt-input.wasm`);
     const temp2 = path.join(this.cachePath, `opt-output.wasm`);
     fs.writeFileSync(temp1, wasm);
     try {
       execFileSync(`wasm-opt`, [`-Os`, temp1, `-o`, temp2]);
     } catch (err) {
-      if (err.code == 'ENOENT')
+      if (err.code === "ENOENT") {
         return wasm;
+      }
       throw err;
     }
     return fs.readFileSync(temp2);
+  }
+
+  protected typescript(wasm: Buffer): string {
+    const parsed = describeWasm(wasm);
+
+    let imports = `export interface FunctionImports {\n`;
+    let importedFunctions = 0;
+    for (const imp of parsed.imports) {
+      if (imp.kind !== "Function") {
+        continue;
+      }
+      importedFunctions += 1;
+      if (imp.module !== "env") {
+        continue;
+      }
+      const signature = parsed.signatures[imp.signature];
+      imports += `  ${imp.name}(`;
+      for (let j = 0; j < signature.params.length; j++) {
+        if (j > 0) {
+          imports += `, `;
+        }
+        imports += `arg${j}: ${this.wasmTypeToTypescript(signature.params[j])}`;
+      }
+      imports += `): ${this.wasmTypeToTypescript(signature.return)};\n`;
+    }
+    imports += `}\n`;
+
+    imports += `
+export interface Imports {
+  env: FunctionImports;
+}`;
+
+    let exports = `export interface Exports {\n`;
+    for (const exp of parsed.exports) {
+      if (exp.kind === "Memory") {
+        exports += `  ${exp.name}: WebAssembly.Memory;\n`;
+        continue;
+      }
+      if (exp.kind !== "Function") {
+        continue;
+      }
+      const func = parsed.functions[exp.index - importedFunctions];
+      const signature = parsed.signatures[func];
+      exports += `  ${exp.name}(`;
+      for (let j = 0; j < signature.params.length; j++) {
+        if (j > 0) {
+          exports += `, `;
+        }
+        exports += `arg${j}: ${this.wasmTypeToTypescript(signature.params[j])}`;
+      }
+      exports += `): ${this.wasmTypeToTypescript(signature.return)};\n`;
+    }
+    exports += `}`;
+
+    const ret = this.generateAsyncWrapper ? `Promise<Exports>` : `Exports`;
+
+    return `
+${imports}
+
+${exports}
+
+declare const Mod: (imports: Imports) => ${ret};
+
+export default Mod;
+`;
+  }
+
+  protected wasmTypeToTypescript(ty: string): string {
+    if (ty === "i32" || ty === "i64" || ty === "f32" || ty === "f64") {
+      return "number";
+    }
+    if (ty === "void") {
+      return "void";
+    }
+    throw new Error(`unknown wasm type: ${ty}`);
   }
 }
 
