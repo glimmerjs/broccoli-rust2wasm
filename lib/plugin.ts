@@ -125,9 +125,11 @@ export default class RustPlugin extends Plugin {
     const deserialized = `toBuffer("${buffer.toString("base64")}")`;
     if (this.generateAsyncWrapper) {
       return `${toBuffer}
-export default async (imports) =>
-  const mod = await WebAssembly.compile(${deserialized});
-  return (await WebAssembly.instantiate(mod, imports)).exports;`;
+export default (imports) => {
+  return WebAssembly.compile(${deserialized})
+      .then((mod) => WebAssembly.instantiate(mod, imports))
+      .then((m) => m.exports)
+}`;
     } else {
       return `${toBuffer}
 const mod = new WebAssembly.Module(${deserialized});
