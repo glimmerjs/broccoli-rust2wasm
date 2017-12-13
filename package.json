@@ -1,6 +1,6 @@
 {
   "name": "broccoli-rust2wasm",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "broccoli plugin to build rust to wasm",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
